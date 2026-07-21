@@ -23,7 +23,15 @@ The existing Microsoft 365 MCP connector provides read-only SharePoint access (`
 
 ## What we produce
 
-An **MCP server** built with **FastMCP (Python)** that exposes a small set of tools over the Model Context Protocol. It runs as a local process (stdio transport) or a remote HTTP/SSE endpoint, depending on deployment context.
+An **MCP server** built with **FastMCP (Python)** that exposes a small set of tools over the Model Context Protocol. It runs as a local process (stdio transport) or a remote HTTP/SSE endpoint, depending on deployment context. (Framework choice: [ADR-0003](adr/0003-fastmcp-framework.md).)
+
+## Where we persist
+
+**Stateless.** The server holds no persistent data — no file, no database. Its only runtime state is an **in-memory OAuth token cache** (acquire / cache / refresh on expiry), owned by the auth layer. Every tool call reads from and writes to SharePoint via Graph; nothing is retained between calls.
+
+## Method
+
+**N/A — deterministic API integration.** This is not a rules / classical-ML / LLM classification problem: each tool maps directly onto a Microsoft Graph REST call. There is no inference step in the server itself; the reasoning lives in the calling agent.
 
 ## Tools
 
@@ -41,14 +49,14 @@ Enumerate the metadata columns defined on a document library — internal name, 
 
 ## Auth
 
-**App-only client credentials — no interactive OAuth, no SSO, no user-facing auth flow.** The server authenticates as an application, not as a user. Setup is a one-time Entra ID app registration; at runtime the server reads three environment variables and acquires tokens silently. There is no browser redirect, no consent popup, and no user involvement at any point.
+**App-only client credentials — no interactive OAuth, no SSO, no user-facing auth flow.** The server authenticates as an application, not as a user. Setup is a one-time Entra ID app registration; at runtime the server reads three environment variables and acquires tokens silently. There is no browser redirect, no consent popup, and no user involvement at any point. (Auth model: [ADR-0001](adr/0001-app-only-client-credentials-auth.md).)
 
 ### Why a write-capable permission is required
 
 This server does not modify file content, move or delete documents, or change permissions. However, updating a metadata column value on a document is a **write to a list item** in Graph terms (`PATCH .../items/{id}/fields`). Graph does not offer a narrower "metadata-only write" scope — any list item field update requires a permission that allows writes. Read-only permissions (`Sites.Read.All`) are insufficient.
 
 ### Required Graph permissions (application)
-- `Sites.Selected` (preferred — scoped to only the specific sites this server needs to access) **or** `Sites.ReadWrite.All` (broader, simpler initial setup). The server reads documents and columns (read) and sets metadata column values (write). It does not use any other write capability the permission grants — file upload, deletion, and permission management are not exposed as tools.
+- `Sites.Selected` (preferred — scoped to only the specific sites this server needs to access) **or** `Sites.ReadWrite.All` (broader, simpler initial setup). The server reads documents and columns (read) and sets metadata column values (write). It does not use any other write capability the permission grants — file upload, deletion, and permission management are not exposed as tools. (Permission scope: [ADR-0002](adr/0002-permission-scope-sites-selected.md).)
 
 ### Credentials
 Three environment variables, set once:
@@ -63,7 +71,7 @@ These are never hardcoded, never passed as tool parameters, and never visible to
 
 ## Graph API surface
 
-All operations go through the Microsoft Graph REST API v1.0.
+All operations go through the Microsoft Graph REST API v1.0. (API choice: [ADR-0004](adr/0004-microsoft-graph-api.md).)
 
 | Operation | Graph endpoint |
 |---|---|
@@ -87,7 +95,7 @@ Target: **interactive, single-document operations** — an agent updating a hand
 
 ## Deployment
 
-Two transport modes, both supported by FastMCP:
+Two transport modes, both supported by FastMCP (dual-transport decision: [ADR-0005](adr/0005-dual-transport-stdio-http.md)):
 
 - **stdio** — for local use with Claude Desktop or Claude Code. The MCP server runs as a subprocess; config goes in `claude_desktop_config.json` or `.mcp.json`.
 - **HTTP/SSE** — for remote or shared use. The server runs as a long-lived process behind a URL.
