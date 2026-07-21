@@ -54,6 +54,11 @@ select = ["E", "F", "I", "UP", "B", "N", "ARG", "SIM", "ERA", "PLR", "C901"]
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
+[tool.ruff.lint.isort]
+# Pin the first-party package so import grouping doesn't depend on which submodules
+# exist on disk yet (TDD tests may import a module before its source is written).
+known-first-party = ["spdoc_mcp"]
+
 [tool.mypy]
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
