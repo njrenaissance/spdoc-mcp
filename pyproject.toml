@@ -41,6 +41,7 @@ max-complexity = 10
 
 [tool.mypy]
 python_version = "3.13"
+plugins = ["pydantic.mypy"]
 files = ["src"]
 disallow_untyped_defs = true
 warn_return_any = true
