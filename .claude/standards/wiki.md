@@ -20,7 +20,11 @@
   auth instructions live in the project `README`; `openwiki` is a per-machine
   global CLI, **not** a project dependency, and must never be added to
   `pyproject.toml`.
-- Automating regeneration in CI (a workflow that rebuilds the wiki and opens
-  a PR) is a deliberate future step, deferred for now — until then, keeping
-  `openwiki/` current is the committer's manual responsibility per the rule
-  above.
+- Regeneration is also automated in CI: `.github/workflows/openwiki-update.yml`
+  runs `openwiki code --update` on a daily schedule (and on `workflow_dispatch`),
+  then opens a `docs: update OpenWiki` PR whenever the regenerated `openwiki/`
+  differs from `main`. It calls a **paid** LLM provider, so it is deliberately
+  not run on every push. This safety net does not replace the rule above:
+  regenerate and stage `openwiki/` alongside the code change that touches it, so
+  the wiki lands in the same PR rather than drifting until the nightly job
+  catches up.

@@ -1,0 +1,67 @@
+name: OpenWiki Update
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # daily 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-wiki:
+    name: Regenerate OpenWiki
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # create-pull-request commits the openwiki/update branch
+      pull-requests: write # ...and opens/updates the review PR
+    env:
+      OPENWIKI_PROVIDER: anthropic
+      OPENWIKI_MODEL_ID: ${{ vars.OPENWIKI_MODEL_ID || 'claude-haiku-4-5' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install OpenWiki CLI
+        run: npm install -g openwiki
+
+      - name: Regenerate wiki
+        run: openwiki code --update --print
+
+      # Provenance is not stamped here: `openwiki code --update` writes its own
+      # `openwiki/.last-update.json` (updatedAt / gitHead / model), which is
+      # tracked and covered by add-paths below. A hand-written marker under
+      # `openwiki/` fails the CLI's front-matter validation on the next run.
+
+      - name: Open or update docs PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          # Commit the generated wiki plus the OPENWIKI block openwiki
+          # maintains in CLAUDE.md. add-paths is an allowlist, so the other
+          # two files `openwiki code --update` writes stay uncommitted:
+          #   - the workflow file — the default GITHUB_TOKEN may not push
+          #     `.github/workflows/**`, and no `workflows` permission scope
+          #     exists to grant it; and
+          #   - AGENTS.md — openwiki's non-Claude counterpart to CLAUDE.md,
+          #     which this project deliberately keeps out (also git-ignored).
+          add-paths: |
+            openwiki
+            CLAUDE.md
+          branch: openwiki/update
+          commit-message: "docs: update OpenWiki"
+          title: "docs: update OpenWiki"
+          body: |
+            Automated OpenWiki regeneration (Anthropic provider).
+
+            Generated output — review the rendered docs, do not hand-edit `openwiki/`.
+            See `.claude/standards/wiki.md` and #16.
+          labels: documentation
+          delete-branch: false
