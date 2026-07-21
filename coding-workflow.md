@@ -42,15 +42,15 @@ Inner:                          Plan (HITL) → Build → Validate → Review (H
 
 **Goal:** Determine what can be built in parallel and what must be sequenced, and agree on the product-level plan before any issue enters Build.
 
-1. A **context-free sequencing subagent** receives the full list of open issues labeled `ready-to-plan` or `ready-to-build`.
-2. It analyzes each issue for dependencies — shared modules, data model changes, API contracts, migration requirements — and produces:
+1. **First, decompose.** A reasoning-model agent reads the foundational feature description and produces (or updates) the canonical **`spec/spec.md`** (see "## Spec Artifact" below) — the product-level plan and its decomposition into independently buildable issues. This comes first because the issues the rest of this step sequences do not exist until the spec defines them.
+2. **Then, sequence.** A **context-free sequencing subagent** receives the resulting issue set — the issues the spec just decomposed, together with any already-open issues labeled `ready-to-plan` or `ready-to-build`.
+3. It analyzes each issue for dependencies — shared modules, data model changes, API contracts, migration requirements — and produces:
    - A **dependency graph** (which issues block which)
    - A **parallel execution groups** list (issues with no interdependencies that can run simultaneously)
    - A **recommended build order** for sequenced issues
-3. In parallel, a reasoning-model agent reads the foundational feature description and produces (or updates) the canonical **`spec/spec.md`** (see "## Spec Artifact" below) — the product-level plan and decomposition into independently buildable issues.
-4. Output (dependency graph, parallel groups, build order, `spec.md`) is written back to GitHub (e.g., as issue comments or labels) and to the repo, and used to schedule outer Build's invocations of the inner loop.
+4. Output (`spec.md`, dependency graph, parallel groups, build order) is written back to GitHub (e.g., as issue comments or labels) and to the repo, and used to schedule outer Build's invocations of the inner loop.
 5. Human explicitly approves the product spec and the issue decomposition/build order. This is the **outer HITL gate**.
-6. This step reruns whenever new issues are added to the queue.
+6. This step reruns whenever new issues are added to the queue; on a rerun the issue set already exists, so sequencing (steps 2–3) runs directly without re-authoring the spec.
 
 **Model:** Reasoning-class — dependency inference and product-level planning require understanding code relationships and risk, not just surface-level issue text.
 **Exit condition:** Dependency graph and build order established; `spec.md` approved (`Status: approved`) and committed.
