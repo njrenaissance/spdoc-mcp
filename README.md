@@ -49,6 +49,40 @@ regenerate-before-commit rule agents follow.
 uv run python src/main.py
 ```
 
+## Run as an MCP server (stdio)
+
+The server runs over the **stdio** transport as a subprocess, for local use with
+Claude Desktop or Claude Code:
+
+```bash
+uv run spdoc-mcp          # console script
+uv run python -m spdoc_mcp  # equivalent module entrypoint
+```
+
+Register it by adding an entry to your MCP client config — `.mcp.json` (Claude
+Code) or `claude_desktop_config.json` (Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "spdoc-mcp": {
+      "command": "uv",
+      "args": ["run", "spdoc-mcp"],
+      "cwd": "/path/to/spdoc-mcp",
+      "env": {
+        "AZURE_TENANT_ID": "your-tenant-id",
+        "AZURE_CLIENT_ID": "your-client-id",
+        "AZURE_CLIENT_SECRET": "your-client-secret"
+      }
+    }
+  }
+}
+```
+
+Credentials are read from the environment (never passed as tool parameters). See
+`.env.example` for the full list of variables. Logs are written to stderr;
+stdout carries the MCP protocol stream and must stay clean.
+
 ## Test
 
 ```bash
