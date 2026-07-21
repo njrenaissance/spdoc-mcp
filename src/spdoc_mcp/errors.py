@@ -8,7 +8,7 @@ clause breaks the exception chain and hides the real root cause from whoever
 reads the traceback.
 """
 
-from typing import Any
+from typing import Any, Self
 
 
 class AppError(Exception):
@@ -27,7 +27,7 @@ class NotFoundError(AppError):
     """A site, library, document, or column could not be resolved."""
 
 
-class ValidationError(AppError):
+class ToolArgumentError(AppError):
     """Bad tool arguments — e.g. a choice value not in the column's allowed set."""
 
 
@@ -53,13 +53,16 @@ class GraphError(AppError):
         self.graph_message = graph_message
 
     @classmethod
-    def from_response(cls, status_code: int, body: dict[str, Any] | None) -> "GraphError":
+    def from_response(cls, status_code: int, body: dict[str, Any] | None) -> Self:
         """Build a :class:`GraphError` from a status code and a parsed error body.
 
         Graph error bodies have the shape ``{"error": {"code", "message", ...}}``.
-        A missing or empty body degrades gracefully to a status-only message.
+        A missing, empty, or malformed ``error`` node degrades gracefully to a
+        status-only message.
         """
-        error = (body or {}).get("error", {})
+        error = (body or {}).get("error")
+        if not isinstance(error, dict):
+            error = {}
         graph_code = error.get("code")
         graph_message = error.get("message")
         message = f"Graph request failed with status {status_code}"

@@ -1,5 +1,7 @@
 """Unit tests for the domain exception hierarchy."""
 
+from typing import Any
+
 import pytest
 
 from spdoc_mcp.errors import (
@@ -8,7 +10,7 @@ from spdoc_mcp.errors import (
     ConfigError,
     GraphError,
     NotFoundError,
-    ValidationError,
+    ToolArgumentError,
 )
 
 
@@ -19,7 +21,7 @@ from spdoc_mcp.errors import (
         pytest.param(ConfigError, id="config"),
         pytest.param(AuthError, id="auth"),
         pytest.param(NotFoundError, id="not_found"),
-        pytest.param(ValidationError, id="validation"),
+        pytest.param(ToolArgumentError, id="tool_argument"),
         pytest.param(GraphError, id="graph"),
     ],
 )
@@ -49,16 +51,45 @@ def test_graph_error_stores_context() -> None:
 
 
 @pytest.mark.unit
-def test_graph_error_from_response_parses_body() -> None:
+@pytest.mark.parametrize(
+    ("body", "expected_code", "expected_message", "expected_str"),
+    [
+        pytest.param(
+            {"error": {"code": "invalidRequest", "message": "bad choice value"}},
+            "invalidRequest",
+            "bad choice value",
+            "Graph request failed with status 400: invalidRequest — bad choice value",
+            id="code_and_message",
+        ),
+        pytest.param(
+            {"error": {"code": "invalidRequest"}},
+            "invalidRequest",
+            None,
+            "Graph request failed with status 400: invalidRequest",
+            id="code_only",
+        ),
+        pytest.param(
+            {"error": {"message": "bad choice value"}},
+            None,
+            "bad choice value",
+            "Graph request failed with status 400 — bad choice value",
+            id="message_only",
+        ),
+    ],
+)
+def test_graph_error_from_response_builds_message(
+    body: dict[str, Any] | None,
+    expected_code: str | None,
+    expected_message: str | None,
+    expected_str: str,
+) -> None:
     status = 400
-    body = {"error": {"code": "invalidRequest", "message": "bad choice value"}}
-
     error = GraphError.from_response(status, body)
 
     assert error.status_code == status
-    assert error.graph_code == "invalidRequest"
-    assert error.graph_message == "bad choice value"
-    assert str(error) == "Graph request failed with status 400: invalidRequest — bad choice value"
+    assert error.graph_code == expected_code
+    assert error.graph_message == expected_message
+    assert str(error) == expected_str
 
 
 @pytest.mark.unit
@@ -68,9 +99,11 @@ def test_graph_error_from_response_parses_body() -> None:
         pytest.param(None, id="none_body"),
         pytest.param({}, id="empty_body"),
         pytest.param({"error": {}}, id="empty_error"),
+        pytest.param({"error": None}, id="null_error"),
+        pytest.param({"error": "forbidden"}, id="non_dict_error"),
     ],
 )
-def test_graph_error_from_response_degrades_gracefully(body: dict | None) -> None:
+def test_graph_error_from_response_degrades_gracefully(body: dict[str, Any] | None) -> None:
     status = 500
     error = GraphError.from_response(status, body)
 
