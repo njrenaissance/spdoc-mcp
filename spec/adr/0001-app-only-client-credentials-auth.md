@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | accepted |
+| Status | proposed |
 
 ## Context
 
@@ -43,7 +43,8 @@ browser redirect, no consent popup, no user involvement at call time.
 ## Consequences
 
 - The server owns its token lifecycle (acquire / cache in memory / refresh on expiry); this
-  is the only server-side state (see ADR-0005 and the spec's "Where we persist").
+  is the only server-side state (see [ADR-0005](0005-dual-transport-stdio-http.md) and the
+  spec's "Where we persist").
 - The client secret is a required, no-default secret handled per the configuration standard
   (`SecretStr`, environment-sourced, never a tool parameter, never logged).
 - The required Graph *permission scope* is a separate decision — see
