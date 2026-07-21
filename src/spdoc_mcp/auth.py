@@ -39,8 +39,12 @@ class TokenProvider:
         # immune to wall-clock/NTP/DST jumps that could prematurely expire or over-extend a token.
         self._clock = clock
         self._access_token: str | None = None
-        self._expires_at: float | None = None
-        self._lock = asyncio.Lock()
+        self._refresh_at: float | None = None
+        # The lock is created lazily inside the running loop (see _get_lock): an asyncio.Lock
+        # binds to the first loop that awaits it, and this provider is a process-wide singleton
+        # that may outlive the loop it was first used on.
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
 
     async def get_token(self) -> str:
         """Return a valid Graph access token, acquiring or refreshing only when needed.
@@ -52,18 +56,32 @@ class TokenProvider:
         if self._is_fresh():
             return self._require_token()
 
-        async with self._lock:
+        async with self._get_lock():
             # Re-check: another coroutine may have refreshed while we awaited the lock.
             if self._is_fresh():
                 return self._require_token()
             await self._refresh()
             return self._require_token()
 
+    def _get_lock(self) -> asyncio.Lock:
+        """Return a lock bound to the current running loop, recreating it if the loop changed.
+
+        The provider is a cached singleton, so it may be awaited from more than one event loop
+        over the process lifetime (e.g. a startup credential check, then the server's own loop);
+        a lock bound to a stale loop would raise. This runs synchronously with no await, so it
+        cannot interleave within a single loop.
+        """
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
+
     def _is_fresh(self) -> bool:
-        """True when a cached token exists and is still comfortably before its refresh margin."""
-        if self._access_token is None or self._expires_at is None:
+        """True when a cached token exists and has not yet reached its refresh deadline."""
+        if self._access_token is None or self._refresh_at is None:
             return False
-        return self._clock() < self._expires_at - _REFRESH_MARGIN_SECONDS
+        return self._clock() < self._refresh_at
 
     def _require_token(self) -> str:
         """Return the cached token, asserting the invariant that a fresh path set it."""
@@ -72,10 +90,13 @@ class TokenProvider:
         return self._access_token
 
     async def _refresh(self) -> None:
-        """Fetch a new token and update the cache with its absolute expiry on our clock."""
+        """Fetch a new token and record the deadline at which it must be refreshed."""
         token, expires_in = await self._fetch_token()
+        # Clamp the refresh margin to at most half the token's lifetime, so a short-lived
+        # token is still cached for a while instead of being treated as stale on arrival.
+        margin = min(_REFRESH_MARGIN_SECONDS, expires_in / 2)
         self._access_token = token
-        self._expires_at = self._clock() + expires_in
+        self._refresh_at = self._clock() + expires_in - margin
 
     async def _fetch_token(self) -> tuple[str, int]:
         """Perform the client-credentials request and return (access_token, expires_in).
@@ -112,7 +133,10 @@ class TokenProvider:
             payload = response.json()
             if not isinstance(payload, dict):
                 raise ValueError("token response was not a JSON object")
-            return str(payload["access_token"]), int(payload["expires_in"])
+            access_token = payload["access_token"]
+            if not isinstance(access_token, str) or not access_token:
+                raise ValueError("token response had no usable access_token")
+            return access_token, int(payload["expires_in"])
         except (KeyError, ValueError, TypeError) as err:
             raise AuthError("Malformed token response from Microsoft Graph") from err
 

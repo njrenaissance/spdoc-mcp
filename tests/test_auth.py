@@ -134,6 +134,43 @@ async def test_no_refresh_just_inside_margin() -> None:
 
 
 @pytest.mark.unit
+async def test_short_lived_token_is_cached_with_clamped_margin() -> None:
+    short_expiry = 100  # <= the 300 s refresh margin, so the margin must clamp to half the lifetime
+    clock = FakeClock()
+    with respx.mock:
+        route = respx.post(TOKEN_URL).mock(
+            side_effect=[
+                _token_response("short-1", expires_in=short_expiry),
+                _token_response("short-2", expires_in=short_expiry),
+            ]
+        )
+        provider = TokenProvider(clock=clock)
+        first = await provider.get_token()
+        clock.advance(short_expiry / 2 - 1)  # still inside the clamped (lifetime / 2) window
+        cached = await provider.get_token()
+        clock.advance(short_expiry)  # now past the refresh deadline
+        refreshed = await provider.get_token()
+
+    assert first == cached == "short-1"
+    assert refreshed == "short-2"
+    assert route.call_count == REFRESH_CALLS
+
+
+@pytest.mark.unit
+def test_get_token_survives_across_event_loops() -> None:
+    clock = FakeClock()
+    with respx.mock:
+        respx.post(TOKEN_URL).mock(side_effect=[_token_response("loop-1"), _token_response("loop-2")])
+        provider = TokenProvider(clock=clock)
+        first = asyncio.run(provider.get_token())  # lock is created and bound to this loop
+        clock.advance(EXPIRES_IN + 100)  # force the next call to re-acquire the lock
+        second = asyncio.run(provider.get_token())  # a different loop must not raise
+
+    assert first == "loop-1"
+    assert second == "loop-2"
+
+
+@pytest.mark.unit
 async def test_concurrent_callers_refresh_once() -> None:
     with respx.mock:
         route = respx.post(TOKEN_URL).mock(return_value=_token_response("shared-token"))
@@ -171,6 +208,10 @@ async def test_http_status_error_raises_auth_error(status: int) -> None:
     [
         pytest.param(httpx.Response(200, json={"expires_in": EXPIRES_IN}), id="missing_access_token"),
         pytest.param(httpx.Response(200, text="not-json"), id="non_json_body"),
+        pytest.param(
+            httpx.Response(200, json={"access_token": None, "expires_in": EXPIRES_IN}), id="null_access_token"
+        ),
+        pytest.param(httpx.Response(200, json={"access_token": "", "expires_in": EXPIRES_IN}), id="empty_access_token"),
     ],
 )
 async def test_malformed_response_raises_auth_error(response: httpx.Response) -> None:
