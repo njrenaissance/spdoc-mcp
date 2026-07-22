@@ -18,9 +18,9 @@ def test_create_app_returns_named_fastmcp() -> None:
 
 
 @pytest.mark.unit
-async def test_scaffold_registers_no_tools() -> None:
+async def test_registers_the_list_columns_tool() -> None:
     async with Client(create_app()) as client:
-        assert await client.list_tools() == []
+        assert "list_columns" in [tool.name for tool in await client.list_tools()]
 
 
 @pytest.mark.unit
@@ -35,7 +35,7 @@ async def test_registration_mechanism_exposes_tool() -> None:
     register(app)
 
     async with Client(app) as client:
-        assert [tool.name for tool in await client.list_tools()] == ["echo"]
+        assert "echo" in [tool.name for tool in await client.list_tools()]
         result = await client.call_tool("echo", {"value": "hi"})
         assert result.data == "hi"
 
