@@ -21,6 +21,7 @@ from fastmcp import FastMCP
 
 from spdoc_mcp.logging_config import configure_logging
 from spdoc_mcp.middleware import ErrorHandlingMiddleware
+from spdoc_mcp.tools import list_columns
 
 APP_NAME = "spdoc-mcp"
 
@@ -42,8 +43,8 @@ def _register_tools(app: FastMCP) -> None:
     """Register every tool onto ``app``.
 
     The four tool issues (#10-#13) each add one ``register(app)`` call here.
-    No tools exist yet, so this is intentionally empty.
     """
+    list_columns.register(app)
 
 
 def main() -> None:
