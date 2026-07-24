@@ -19,7 +19,11 @@ src/spdoc_mcp/
 ├── settings.py           # Configuration (Pydantic) — single source of truth
 ├── middleware.py         # Error-handling boundary
 ├── errors.py             # Domain exception hierarchy
-└── logging_config.py     # Logging setup (stderr, INFO level)
+├── logging_config.py     # Logging setup (stderr, INFO level)
+├── graph.py              # Microsoft Graph API client
+└── tools/                # MCP tool implementations
+    ├── __init__.py
+    └── list_columns.py   # Metadata column discovery tool (issue #10)
 ```
 
 Each module has a clear responsibility and explicit internal-only state (if any).
@@ -63,7 +67,7 @@ def create_app() -> FastMCP:
 
 - **`mask_error_details=True`** — prevents FastMCP from surfacing raw exception text for unhandled (programmer) errors; the middleware handles domain-level errors separately.
 - **ErrorHandlingMiddleware** — catches domain errors at the tool boundary and converts them to clean MCP responses.
-- **`_register_tools(app)`** — a seam where future tool implementations register themselves (empty for now).
+- **`_register_tools(app)`** — a seam where tool implementations register themselves (see [Tool Registration Contract](#tool-registration-contract) below).
 
 ## Tool Registration Contract
 
@@ -74,8 +78,10 @@ def _register_tools(app: FastMCP) -> None:
     """Register every tool onto ``app``.
 
     The four tool issues (#10-#13) each add one ``register(app)`` call here.
-    No tools exist yet, so this is intentionally empty.
     """
+    list_columns.register(app)
+    # Additional tools (list_documents, get_document_metadata, update_document_metadata)
+    # will register here as they are implemented in issues #11-#13.
 ```
 
 When a tool is implemented, a new module (e.g., `tools/list_documents.py`) exposes:
@@ -236,15 +242,18 @@ server.py (create_app, main)
   ├── middleware.py (ErrorHandlingMiddleware)
   │   └── errors.py (AppError hierarchy)
   ├── logging_config.py (configure_logging)
-  └── [tools] (future tool modules)
+  └── tools/ (tool modules)
+      └── list_columns.py (and future: list_documents, get_document_metadata, update_document_metadata)
 
 [tools]
-  ├── auth.py (TokenProvider, get_token)
-  │   ├── settings.py (get_settings)
-  │   └── errors.py (AuthError)
-  ├── settings.py (get_settings)
-  ├── errors.py (domain exceptions)
-  └── httpx (Graph HTTP client)
+  ├── graph.py (Microsoft Graph API client)
+  │   ├── auth.py (TokenProvider, get_token)
+  │   │   ├── settings.py (get_settings)
+  │   │   └── errors.py (AuthError, ConfigError)
+  │   ├── errors.py (NotFoundError, GraphError)
+  │   └── httpx (async HTTP client)
+  ├── errors.py (ToolArgumentError, etc.)
+  └── settings.py (get_settings)
 ```
 
 No circular imports. Each module depends only on modules below it (or at the same level, e.g., tools → errors).
@@ -260,6 +269,8 @@ Tests live in `/tests`:
 - `test_errors.py` — exception behavior.
 - `test_logging_config.py` — logging setup.
 - `test_main.py` — entrypoint (minimal).
+- `test_graph.py` — Microsoft Graph API client and resolver behavior.
+- `tools/test_list_columns.py` — `list_columns` tool implementation.
 
 See [Testing Guide](../testing.md) for patterns and conventions.
 
