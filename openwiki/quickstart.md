@@ -181,7 +181,7 @@ See [Specification & Architecture Decision Records](./reference/spec-and-adrs.md
 
 ## Backlog
 
-- **MCP Tools Implementation** — Define and implement the four tools (`list_documents`, `get_document_metadata`, `update_document_metadata`, `list_columns`). See `/spec/spec.md` for tool spec and acceptance criteria.
+- **Remaining MCP Tools** — Implement the three remaining tools (`list_documents`, `get_document_metadata`, `update_document_metadata`). See `/spec/spec.md` for tool spec and acceptance criteria. (`list_columns` completed in issue #10.)
 - **HTTP/SSE Transport** — Dual transport is designed in (ADR-0005, settings), but HTTP/SSE deployment is not yet implemented. Low priority for v1 (stdio is primary).
 - **Pagination** — Current implementation expects Graph to return up to 200 items by default. Explicit pagination strategy is deferred.
 - **Managed Metadata (Taxonomy) Columns** — May require the SharePoint REST API rather than Graph for term resolution. Deferred pending tool implementation and real-world usage.
